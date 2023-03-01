@@ -23,7 +23,7 @@ struct WebServer {
   bool openLinger;  // 是否优雅关闭
   bool isclose;     // 是否关闭
   char* srcDir;     // 文件夹目录
-  int timeout;      // 定时器定时
+  int timeoutMS;    // 定时器定时
   uint32_t listenEvent;
   uint32_t connEvent;
   std::unique_ptr<Timer> timer;
@@ -42,6 +42,12 @@ struct WebServer {
   void initEventMode();
   void initListenSocket();
   void setFdNonBlock(int fd);
+  void dealListen();
+  void sendBusyMsg(int fd, const char* msg);
+  void addClient(int fd, sockaddr_in addr);
+  void closeConn(int fd);
+  void dealRead(int fd);
+  void dealWrite(int fd);
 };
 
 #endif
