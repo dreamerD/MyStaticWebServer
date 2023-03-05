@@ -29,7 +29,6 @@ int main(void) {
       }
       buf[i - 1] = '\n';
       ch++;
-
       // bbbb\n
       for (; i < MAXLINE; i++) {
         buf[i] = ch;
@@ -37,9 +36,9 @@ int main(void) {
       buf[i - 1] = '\n';
       ch++;
       // aaaa\nbbbb\n
-      sleep(10);
       write(pfd[1], buf, sizeof(buf));
-      close(pfd[1]);
+      sleep(10);
+      break;
     }
     close(pfd[1]);
   } else if (pid > 0) {  // parent process
@@ -71,20 +70,23 @@ int main(void) {
       }
       if (evts[0].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) {
         printf("exit!\n");
-        // break;
+        break;
       }
       if (evts[0].data.fd == pfd[0]) {
-        while (len != -2) {
-          len = read(pfd[0], buf, MAXLINE / 2);
-          printf("%d\n", len);
-          write(STDOUT_FILENO, buf, len);
+        // sleep(10);
+        len = read(pfd[0], buf, MAXLINE / 2);
+        if (len <= 0) {
+          break;
         }
+        printf("%d\n", len);
+        write(STDOUT_FILENO, buf, len);
+        epoll_event ev = {0};
+        ev.data.fd = evts[0].data.fd;
+        ev.events = EPOLLIN | EPOLLET;
+        epoll_ctl(epfd, EPOLL_CTL_MOD, ev.data.fd, &ev);
       }
     }
-    close(pfd[0]);
   }
-
-  while (1)
-    ;
+  close(pfd[0]);
   return 0;
 }

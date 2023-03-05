@@ -29,6 +29,9 @@ WebServer::WebServer(int port, int trigMode, int timeoutMS, bool optLinger,
   initListenSocket();
 }
 void WebServer::Start() {
+  // 之前的项目中存在线程池线程对资源的释放，存在主线程对资源的释放
+  // 修改后的代码后资源的释放应该全部交给主线程
+  // 考虑增加字段以决定是否因超时而关闭连接
   int timeMS = -1;
   printf("Server start!\n");
   while (!isclose) {
@@ -82,15 +85,29 @@ void WebServer::sendBusyMsg(int fd, const char* msg) {
 void WebServer::addClient(int fd, sockaddr_in addr) {
   // 1.添加到users
   // 2.添加timer
+  // 应该是向main线程发送信号，然后删除
+  timer->Add(fd, timeoutMS, std::bind(WebServer::closeConn, this, fd));
   // 3.
   epoller->AddFd(fd, connEvent | EPOLLIN);
   setFdNonBlock(fd);
   printf("client[%d] add success!\n", fd);
 }
 
-void WebServer::closeConn(int fd) {}
-void WebServer::dealRead(int fd) {}
-void WebServer::dealWrite(int fd) {}
+void WebServer::closeConn(int fd) {
+  HttpConn& client = users[fd];
+  //  LOG_INFO("Client[%d] quit!", client->GetFd());
+  printf("Client[%d] quit!", fd);
+  epoller->DeleteFd(fd);
+  client.Close();
+}
+void WebServer::dealRead(int fd) {
+  timer->Adjust(fd, timeoutMS);  // 调整定时器
+  threadpool->AddTask(std::bind(&WebServer::read, this, fd));
+}
+void WebServer::dealWrite(int fd) {
+  timer->Adjust(fd, timeoutMS);  // 调整定时器
+  threadpool->AddTask(std::bind(&WebServer::write, this, fd));
+}
 
 void WebServer::initEventMode() {
   listenEvent = EPOLLRDHUP | EPOLLET;
@@ -162,6 +179,47 @@ void WebServer::setFdNonBlock(int fd) {
   fcntl(fd, F_SETFL, flag | O_NONBLOCK);
 }
 
+void WebServer::read(int fd) {
+  HttpConn& client = users[fd];
+  int ret = -1;
+  int readErrno = 0;
+  ret = client.read(&readErrno);
+  if (ret <= 0 && readErrno != EAGAIN) {
+    closeConn(fd);
+    return;
+  }
+  process(fd);
+}
+
+void WebServer::write(int fd) {
+  HttpConn& client = users[fd];
+  int ret = -1;
+  int writeErrno = 0;
+  ret = client.write(&writeErrno);
+  if (client.ToWriteBytes() == 0) {
+    /* 传输完成 */
+    if (client.IsKeepAlive()) {
+      process(fd);
+      return;
+    }
+  } else if (ret < 0) {
+    if (writeErrno == EAGAIN) {
+      /* 继续传输 */
+      epoller->ModFd(fd, connEvent | EPOLLOUT);
+      return;
+    }
+  }
+  closeConn(fd);
+}
+
+void WebServer::process(int fd) {
+  HttpConn& client = users[fd];
+  if (client.process()) {
+    epoller->ModFd(fd, connEvent | EPOLLOUT);
+  } else {
+    epoller->ModFd(fd, connEvent | EPOLLIN);
+  }
+}
 WebServer::~WebServer() {
   close(listenfd);
   isclose = true;

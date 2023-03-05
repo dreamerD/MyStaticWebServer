@@ -45,6 +45,13 @@
         "stdexcept": "cpp",
         "streambuf": "cpp",
         "thread": "cpp",
-        "typeinfo": "cpp"
+        "typeinfo": "cpp",
+        "cerrno": "cpp",
+        "iostream": "cpp",
+        "bitset": "cpp",
+        "cstring": "cpp",
+        "unordered_set": "cpp",
+        "map": "cpp",
+        "regex": "cpp"
     }
 }

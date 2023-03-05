@@ -33,6 +33,7 @@ bool Epoller::ModFd(int fd, uint32_t event) {
   epoll_event ev = {0};
   ev.data.fd = fd;
   ev.events = event;
+  // 再次关注
   return 0 == epoll_ctl(epollFd, EPOLL_CTL_MOD, fd, &ev);
 }
 int Epoller::GetEventFd(int pos) {

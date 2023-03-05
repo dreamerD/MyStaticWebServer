@@ -23,9 +23,10 @@ class HeapTimer : public Timer {
   virtual int GetNextTick();
 
  private:
-  void downadjust(size_t fd);
-  void upadjust(size_t fd);
-  void swap(int i, int j);
+  void downadjust(size_t index);
+  void upadjust(size_t index);
+  void swap(size_t i, size_t j);
+  void del(size_t index);
 
  private:
   std::vector<TimerNode> heap;  // 大顶堆

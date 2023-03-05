@@ -10,7 +10,7 @@
 #include <string.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
-#include <timer/time.h>
+#include <timer/timer.h>
 #include <unistd.h>
 
 #include <memory>
@@ -48,6 +48,10 @@ struct WebServer {
   void closeConn(int fd);
   void dealRead(int fd);
   void dealWrite(int fd);
+
+  void read(int fd);
+  void write(int fd);
+  void process(int fd);
 };
 
 #endif

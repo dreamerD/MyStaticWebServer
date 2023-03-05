@@ -11,22 +11,59 @@ void HeapTimer::Adjust(int fd, int timeout) {
 void HeapTimer::Add(int fd, int timeout, std::function<void()>&& cb) {
   assert(fd >= 0);
   /* 新节点：堆尾插入，调整堆 */
-  size_t i = heap.size();
-  ref[fd] = i;
+  ref[fd] = heap.size();
   heap.push_back({fd, TimerNode::Clock::now() + TimerNode::MS(timeout),
                   std::forward<std::function<void()>>(cb)});
-  upadjust(i);
+  upadjust(ref[fd]);
 }
 
-void HeapTimer::DoWork(int id) {}
+void HeapTimer::DoWork(int fd) {
+  if (heap.empty() || ref.count(fd) == 0) {
+    return;
+  }
+  TimerNode& node = heap[ref[fd]];
+  node.cb();
+  del(ref[fd]);
+  return;
+}
 
-void HeapTimer::Clear() {}
+void HeapTimer::Clear() {
+  ref.clear();
+  heap.clear();
+}
 
-void HeapTimer::Tick() {}
+void HeapTimer::Tick() {
+  /* 清除超时结点 */
+  while (!heap.empty()) {
+    TimerNode node = heap.front();
+    if (std::chrono::duration_cast<TimerNode::MS>(node.expires -
+                                                  TimerNode::Clock::now())
+            .count() > 0) {
+      break;
+    }
+    node.cb();
+    Pop();
+  }
+}
 
-void HeapTimer::Pop() {}
+void HeapTimer::Pop() {
+  assert(!heap.empty());
+  del(0);
+}
 
-int HeapTimer::GetNextTick() {}
+int HeapTimer::GetNextTick() {
+  Tick();
+  size_t res = -1;
+  if (!heap.empty()) {
+    res = std::chrono::duration_cast<TimerNode::MS>(heap.front().expires -
+                                                    TimerNode::Clock::now())
+              .count();
+    if (res < 0) {
+      res = 0;
+    }
+  }
+  return res;
+}
 
 void HeapTimer::downadjust(size_t index) {
   size_t i = index;
@@ -55,10 +92,17 @@ void HeapTimer::upadjust(size_t index) {
   }
 }
 
-void HeapTimer::swap(int i, int j) {
+void HeapTimer::swap(size_t i, size_t j) {
   // https://blog.csdn.net/zqw_yaomin/article/details/81278948
   // 通过move实现交换
   std::swap(heap[i], heap[j]);  // 思考swap
   ref[heap[i].fd] = j;
   ref[heap[j].fd] = i;
+}
+
+void HeapTimer::del(size_t index) {
+  swap(index, heap.size() - 1);
+  ref.erase(heap.back().fd);  // 删除索引
+  heap.pop_back();
+  downadjust(index);
 }

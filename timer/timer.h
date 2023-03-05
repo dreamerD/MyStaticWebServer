@@ -15,18 +15,18 @@ struct TimerNode {
 
 class Timer {
  public:
-  virtual void Adjust(int id, int newExpires) = 0;
+  virtual void Adjust(int id, int newExpires);
 
-  virtual void Add(int id, int timeOut, std::function<void()>&& cb) = 0;
+  virtual void Add(int id, int timeOut, std::function<void()>&& cb);
 
-  virtual void DoWork(int id) = 0;
+  virtual void DoWork(int id);
 
-  virtual void Clear() = 0;
+  virtual void Clear();
 
-  virtual void Tick() = 0;
+  virtual void Tick();
 
-  virtual void Pop() = 0;
+  virtual void Pop();
 
-  virtual int GetNextTick() = 0;
+  virtual int GetNextTick();
 };
 #endif
