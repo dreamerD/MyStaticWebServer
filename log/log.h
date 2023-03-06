@@ -1,5 +1,9 @@
 #ifndef LOG_H
 #define LOG_H
+#include <assert.h>
+#include <stdarg.h>
+#include <sys/stat.h>
+
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -13,8 +17,8 @@ class Log {
   static Log* Instance();
   static void FlushLogThread();
 
-  void write(int level, const char* format, ...);
-  void flush();
+  void Write(int level, const char* format, ...);
+  void Flush();
 
   int GetLevel();
   void SetLevel(int level);
@@ -49,5 +53,32 @@ class Log {
   std::unique_ptr<BlockDeque<std::string>> deque;
   std::unique_ptr<std::thread> writeThread;
   std::mutex mtx;
+  std::mutex mtxWrite;
 };
+
+#define LOG_BASE(level, format, ...)                 \
+  do {                                               \
+    Log* log = Log::Instance();                      \
+    if (log->IsOpen() && log->GetLevel() <= level) { \
+      log->Write(level, format, ##__VA_ARGS__);      \
+      log->Flush();                                  \
+    }                                                \
+  } while (0);
+
+#define LOG_DEBUG(format, ...)         \
+  do {                                 \
+    LOG_BASE(0, format, ##__VA_ARGS__) \
+  } while (0);
+#define LOG_INFO(format, ...)          \
+  do {                                 \
+    LOG_BASE(1, format, ##__VA_ARGS__) \
+  } while (0);
+#define LOG_WARN(format, ...)          \
+  do {                                 \
+    LOG_BASE(2, format, ##__VA_ARGS__) \
+  } while (0);
+#define LOG_ERROR(format, ...)         \
+  do {                                 \
+    LOG_BASE(3, format, ##__VA_ARGS__) \
+  } while (0);
 #endif

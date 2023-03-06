@@ -12,6 +12,8 @@
 
 #include "buffer/buffer.h"
 #include "httprequest.h"
+#include "httpresponse.h"
+
 class HttpConn {
  public:
   HttpConn();
@@ -20,7 +22,7 @@ class HttpConn {
   void Close();
   ssize_t Read(int& saveErrno);
   ssize_t Write(int& saveErrno);
-  bool Process();
+  int Process();
 
  private:
   const char* GetIP() const;
@@ -39,5 +41,7 @@ class HttpConn {
   Buffer readBuff;
   Buffer writeBuff;
   HttpRequest request;
+  HttpResponse response;
+  char* srcDir;
 };
 #endif

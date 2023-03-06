@@ -180,3 +180,20 @@ void HttpRequest::parseFromUrlencoded() {
     post[key] = value;
   }
 }
+
+void HttpRequest::Init() {
+  method = path = version = body = "";
+  state = REQUEST_LINE;
+  header.clear();
+  post.clear();
+}
+
+std::string& HttpRequest::Path() { return path; }
+
+bool HttpRequest::IsKeepAlive() const {
+  if (header.count("Connection") == 1) {
+    return header.find("Connection")->second == "keep-alive" &&
+           version == "1.1";
+  }
+  return false;
+}

@@ -146,3 +146,14 @@ void HttpResponse::errorContent(Buffer& buff, std::string message) {
   buff.Append("Content-length: " + std::to_string(body.size()) + "\r\n\r\n");
   buff.Append(body);
 }
+
+void HttpResponse::UnmapFile() {
+  if (mmFile) {
+    munmap(mmFile, mmFileStat.st_size);
+    mmFile = nullptr;
+  }
+}
+
+char* HttpResponse::File() { return mmFile; }
+
+size_t HttpResponse::FileLen() const { return mmFileStat.st_size; }

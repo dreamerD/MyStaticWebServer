@@ -58,34 +58,39 @@ ssize_t HttpConn::Write(int& saveErrno) {
       iov[1].iov_base = (uint8_t*)iov[1].iov_base + (len - iov[0].iov_len);
       iov[1].iov_len -= (len - iov[0].iov_len);
       if (iov[0].iov_len) {
-        writeBuff.RetrieveAll();
+        writeBuff.Init();
         iov[0].iov_len = 0;
       }
     } else {
       // static_cast<size_t>(len) <= iov[0].iov_len
       iov[0].iov_base = (uint8_t*)iov[0].iov_base + len;
       iov[0].iov_len -= len;
-      writeBuff.Retrieve(len);
+      writeBuff.MoveReadPos(len);
     }
   } while (1);  // ET模式，一直写，直到写完
   return len;
 }
 
-bool HttpConn::Process() {
+int HttpConn::Process() {
   request.Init();
-  if (readBuff.ReadableBytes() <= 0) {
-    return false;
-  } else if (request.parse(readBuff)) {
-    printf("%s", request.path().c_str());
-    response.Init(srcDir, request.path(), request.IsKeepAlive(), 200);
+  if (readBuff.writePos - readBuff.readPos <= 0) {
+    return 0;
+  }
+  HTTP_CODE res = request.Parse(readBuff);
+  if (res == NO_REQUEST) {
+    return 0;
+  } else if (res == BAD_REQUEST) {
+    response.Init(srcDir, request.Path(), false, 400);
+
   } else {
-    response.Init(srcDir, request.path(), false, 400);
+    printf("%s", request.Path().c_str());
+    response.Init(srcDir, request.Path(), request.IsKeepAlive(), 200);
   }
 
   response.MakeResponse(writeBuff);
   /* 响应头 */
-  iov[0].iov_base = const_cast<char*>(writeBuff.Peek());
-  iov[0].iov_len = writeBuff.ReadableBytes();
+  iov[0].iov_base = const_cast<char*>(writeBuff.ReadBeginPos());
+  iov[0].iov_len = writeBuff.writePos - writeBuff.readPos;
   iovCnt = 1;
 
   /* 文件 */
@@ -94,6 +99,7 @@ bool HttpConn::Process() {
     iov[1].iov_len = response.FileLen();
     iovCnt = 2;
   }
-  printf("filesize:%d, %d  to %d", response.FileLen(), iovCnt, ToWriteBytes());
-  return true;
+  printf("filesize:%d, %d  to %d", response.FileLen(), iovCnt,
+         iov[0].iov_len + iov[1].iov_len);
+  return 1;
 }

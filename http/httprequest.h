@@ -31,6 +31,9 @@ class HttpRequest {
  public:
   HttpRequest() : state(REQUEST_LINE) {}
   HTTP_CODE Parse(Buffer& buff);
+  void HttpRequest::Init();
+  std::string& HttpRequest::Path();
+  bool HttpRequest::IsKeepAlive() const;
 
  private:
   bool parseRequestLine(const std::string& line);  // 返回是否正确
