@@ -14,29 +14,27 @@ WebServer::WebServer(int port, int trigMode, int timeoutMS, bool optLinger,
       threadpool(new ThreadPool()),
       epoller(new Epoller()) {
   if (openLog) {
-    // Log::Instance()->init(logLevel, "./log", ".log", logQueSize);
+    Log::Instance()->Init(logLevel, "./log", ".log", logQueSize);
   }
   srcDir = getcwd(nullptr, 256);
   const char* res = "/resources/";
   strncat(srcDir, res, 256);
-  //   HttpConn::userCount = 0;
-  //   HttpConn::srcDir = srcDir_;
-  //   SqlConnPool::Instance()->Init("localhost", sqlPort, sqlUser, sqlPwd,
-  //   dbName,
-  //   connPoolNum);
+  HttpConn::userCount = 0;
+  HttpConn::srcDir = srcDir;
+  SqlConnPool::Instance()->Init("localhost", sqlPort, sqlUser, sqlPwd, dbName,
+                                connPoolNum);
 
   initEventMode();
   initListenSocket();
 }
 void WebServer::Start() {
-  // 之前的项目中存在线程池线程对资源的释放，存在主线程对资源的释放
-  // 修改后的代码后资源的释放应该全部交给主线程
-  // 考虑增加字段以决定是否因超时而关闭连接
+  // 默认代码逻辑执行时间小于设置的超时时间，
+  // 解决方法，设置标志位判断代码是否结束
   int timeMS = -1;
   printf("Server start!\n");
   while (!isclose) {
     if (timeoutMS > 0) {
-      // timeMS =timer->GetNextTick();
+      timeMS = timer->GetNextTick();
     }
     int ret = epoller->Wait(timeMS);
     for (int i = 0; i < ret; i++) {
@@ -63,7 +61,7 @@ void WebServer::dealListen() {
   // listenEvent & EPOLLET
   int fd;
   while (fd = accept(listenfd, (sockaddr*)&addr, &len) > 0) {
-    if (1) {  // 超人数
+    if (HttpConn::userCount >= MAX_FD) {  // 超人数
       sendBusyMsg(fd, "server busy!");
       printf("client user is max\n");
     } else {
@@ -84,8 +82,8 @@ void WebServer::sendBusyMsg(int fd, const char* msg) {
 
 void WebServer::addClient(int fd, sockaddr_in addr) {
   // 1.添加到users
+  users[fd].Init(fd, addr);
   // 2.添加timer
-  // 应该是向main线程发送信号，然后删除
   timer->Add(fd, timeoutMS, std::bind(WebServer::closeConn, this, fd));
   // 3.
   epoller->AddFd(fd, connEvent | EPOLLIN);
@@ -95,15 +93,17 @@ void WebServer::addClient(int fd, sockaddr_in addr) {
 
 void WebServer::closeConn(int fd) {
   HttpConn& client = users[fd];
-  //  LOG_INFO("Client[%d] quit!", client->GetFd());
-  printf("Client[%d] quit!", fd);
+  LOG_INFO("Client[%d] quit!", client.GetFd());
   epoller->DeleteFd(fd);
   client.Close();
+  timer->DoWork(fd);
 }
+
 void WebServer::dealRead(int fd) {
   timer->Adjust(fd, timeoutMS);  // 调整定时器
   threadpool->AddTask(std::bind(&WebServer::read, this, fd));
 }
+
 void WebServer::dealWrite(int fd) {
   timer->Adjust(fd, timeoutMS);  // 调整定时器
   threadpool->AddTask(std::bind(&WebServer::write, this, fd));
@@ -112,7 +112,6 @@ void WebServer::dealWrite(int fd) {
 void WebServer::initEventMode() {
   listenEvent = EPOLLRDHUP | EPOLLET;
   connEvent = EPOLLRDHUP | EPOLLONESHOT | EPOLLET;
-  //   HttpConn::isET = (connEvent_ & EPOLLET);
 }
 
 // 建立监听套接字
@@ -183,27 +182,29 @@ void WebServer::read(int fd) {
   HttpConn& client = users[fd];
   int ret = -1;
   int readErrno = 0;
-  ret = client.read(&readErrno);
-  if (ret <= 0 && readErrno != EAGAIN) {
+  ret = client.Read(readErrno);
+  if (ret > 0 || readErrno == EINTR || readErrno == EWOULDBLOCK ||
+      readErrno == EAGAIN) {
+    process(fd);
+  } else {
     closeConn(fd);
-    return;
   }
-  process(fd);
 }
 
 void WebServer::write(int fd) {
   HttpConn& client = users[fd];
   int ret = -1;
   int writeErrno = 0;
-  ret = client.write(&writeErrno);
+  ret = client.Write(writeErrno);
   if (client.ToWriteBytes() == 0) {
     /* 传输完成 */
     if (client.IsKeepAlive()) {
-      process(fd);
+      epoller->ModFd(fd, connEvent | EPOLLIN);
       return;
     }
   } else if (ret < 0) {
-    if (writeErrno == EAGAIN) {
+    if (writeErrno == EINTR || writeErrno == EWOULDBLOCK ||
+        writeErrno == EAGAIN) {
       /* 继续传输 */
       epoller->ModFd(fd, connEvent | EPOLLOUT);
       return;
@@ -214,9 +215,9 @@ void WebServer::write(int fd) {
 
 void WebServer::process(int fd) {
   HttpConn& client = users[fd];
-  if (client.process()) {
+  if (client.Process()) {  // 分析失败或成功
     epoller->ModFd(fd, connEvent | EPOLLOUT);
-  } else {
+  } else {  // 分析不完整
     epoller->ModFd(fd, connEvent | EPOLLIN);
   }
 }
@@ -224,5 +225,5 @@ WebServer::~WebServer() {
   close(listenfd);
   isclose = true;
   free(srcDir);
-  // SqlConnPool::Instance()->ClosePool();
+  SqlConnPool::Instance()->ClosePool();
 }

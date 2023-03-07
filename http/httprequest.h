@@ -1,11 +1,14 @@
 #ifndef HTTP_REQUEST_H
 #define HTTP_REQUEST_H
+
 #include <iostream>
 #include <regex>
 #include <unordered_map>
 #include <unordered_set>
 
 #include "buffer/buffer.h"
+#include "database/sqlconnRAII.h"
+#include "log/log.h"
 const std::unordered_set<std::string> DEFAULT_HTML{
     "/index", "/register", "/login", "/welcome", "/video", "/picture",
 };
@@ -44,6 +47,8 @@ class HttpRequest {
   void parsePost();
   void parseFromUrlencoded();
   int converHex(char ch);
+  bool HttpRequest::UserVerify(const std::string& name, const std::string& pwd,
+                               bool isLogin);
 
  private:
   std::string method, path, version, body;

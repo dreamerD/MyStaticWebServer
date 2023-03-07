@@ -14,7 +14,6 @@ void HttpConn::Init(int fd, const sockaddr_in& addr) {
          (int)userCount);
 }
 
-// 主线程调用，需要isclose()标志吗？
 void HttpConn::Close() {
   response.UnmapFile();
   userCount--;
@@ -71,7 +70,7 @@ ssize_t HttpConn::Write(int& saveErrno) {
   return len;
 }
 
-int HttpConn::Process() {
+bool HttpConn::Process() {
   request.Init();
   if (readBuff.writePos - readBuff.readPos <= 0) {
     return 0;
@@ -89,7 +88,7 @@ int HttpConn::Process() {
 
   response.MakeResponse(writeBuff);
   /* 响应头 */
-  iov[0].iov_base = const_cast<char*>(writeBuff.ReadBeginPos());
+  iov[0].iov_base = writeBuff.ReadBeginPos();
   iov[0].iov_len = writeBuff.writePos - writeBuff.readPos;
   iovCnt = 1;
 
@@ -103,3 +102,5 @@ int HttpConn::Process() {
          iov[0].iov_len + iov[1].iov_len);
   return 1;
 }
+
+int HttpConn::ToWriteBytes() { return iov[0].iov_len + iov[1].iov_len; }

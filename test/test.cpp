@@ -1,92 +1,136 @@
+#include <errno.h>
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/epoll.h>
+#include <sys/sendfile.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
-#include "stdio.h"
-#include "stdlib.h"
-#include "sys/types.h"
+#define MAX_EVENTS 10
+#define PORT 8082
 
-#define MAXLINE 10
+// 设置socket连接为非阻塞模式
+void setnonblocking(int sockfd) {
+  int opts;
+  opts = fcntl(sockfd, F_GETFL);
+  if (opts < 0) {
+    perror("fcntl(F_GETFL)\n");
+    exit(1);
+  }
+  opts = (opts | O_NONBLOCK);
+  if (fcntl(sockfd, F_SETFL, opts) < 0) {
+    perror("fcntl(F_SETFL)\n");
+    exit(1);
+  }
+}
 
-int main(void) {
-  pid_t pid;
-  int epfd = -1, i, rval;
-  int pfd[2];
-  char buf[MAXLINE], ch = 'a';
+int main() {
+  struct epoll_event ev,
+      events[MAX_EVENTS];  // ev负责添加事件，events接收返回事件
+  int addrlen, listenfd, conn_sock, nfds, epfd, fd, i, nread, n;
+  struct sockaddr_in local, remote;
+  char buf[BUFSIZ];
 
-  // 创建一个无名管道
-  pipe(pfd);
+  // 创建listen socket
+  if ((listenfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+    perror("sockfd\n");
+    exit(1);
+  }
+  setnonblocking(listenfd);  // listenfd设置为非阻塞[1]
+  bzero(&local, sizeof(local));
+  local.sin_family = AF_INET;
+  local.sin_addr.s_addr = htonl(INADDR_ANY);
+  ;
+  local.sin_port = htons(PORT);
+  if (bind(listenfd, (struct sockaddr *)&local, sizeof(local)) < 0) {
+    perror("bind\n");
+    exit(1);
+  }
+  listen(listenfd, 20);
 
-  pid = fork();
+  epfd = epoll_create(MAX_EVENTS);
+  if (epfd == -1) {
+    perror("epoll_create");
+    exit(EXIT_FAILURE);
+  }
 
-  if (pid == 0) {  // child process
-    close(pfd[0]);
+  ev.events = EPOLLIN;
+  ev.data.fd = listenfd;
+  if (epoll_ctl(epfd, EPOLL_CTL_ADD, listenfd, &ev) == -1) {  // 监听listenfd
+    perror("epoll_ctl: listen_sock");
+    exit(EXIT_FAILURE);
+  }
 
-    while (1) {
-      // aaaa\n
-      for (i = 0; i < MAXLINE / 2; i++) {
-        buf[i] = ch;
-      }
-      buf[i - 1] = '\n';
-      ch++;
-      // bbbb\n
-      for (; i < MAXLINE; i++) {
-        buf[i] = ch;
-      }
-      buf[i - 1] = '\n';
-      ch++;
-      // aaaa\nbbbb\n
-      write(pfd[1], buf, sizeof(buf));
-      sleep(10);
-      break;
+  for (;;) {
+    nfds = epoll_wait(epfd, events, MAX_EVENTS, -1);
+    if (nfds == -1) {
+      perror("epoll_pwait");
+      exit(EXIT_FAILURE);
     }
-    close(pfd[1]);
-  } else if (pid > 0) {  // parent process
-    struct epoll_event evt;
-    struct epoll_event evts[10];
-    int res, len;
 
-    close(pfd[1]);
-    epfd = epoll_create(10);
-    if (epfd < 0) {
-      perror("epoll_create error");
-    }
-
-    evt.events = EPOLLIN | EPOLLET;  // LT 水平触发 (默认)
-    evt.data.fd = pfd[0];
-    rval = epoll_ctl(epfd, EPOLL_CTL_ADD, pfd[0], &evt);
-    if (rval < 0) {
-      perror("epoll_ctl error");
-      return 0;
-    }
-
-    while (1) {
-      memset(buf, 0, sizeof(buf));
-      res = epoll_wait(epfd, evts, 10, -1);
-      printf("res %d\n", res);
-      if (res < 0) {
-        perror("epoll_wait error");
-        return 0;
+    for (i = 0; i < nfds; ++i) {
+      fd = events[i].data.fd;
+      if (fd == listenfd) {
+        while ((conn_sock = accept(listenfd, (struct sockaddr *)&remote,
+                                   (socklen_t *)&addrlen)) > 0) {
+          setnonblocking(conn_sock);  // 下面设置ET模式，所以要设置非阻塞
+          ev.events = EPOLLIN | EPOLLET;
+          ev.data.fd = conn_sock;
+          if (epoll_ctl(epfd, EPOLL_CTL_ADD, conn_sock, &ev) == -1) {  // 读监听
+            perror("epoll_ctl: add");  // 连接套接字
+            exit(EXIT_FAILURE);
+          }
+        }
+        if (conn_sock == -1) {
+          if (errno != EAGAIN && errno != ECONNABORTED && errno != EPROTO &&
+              errno != EINTR)
+            perror("accept");
+        }
+        continue;
       }
-      if (evts[0].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) {
-        printf("exit!\n");
+      if (events[i].events & EPOLLIN) {
+        n = 0;
+        while ((nread = read(fd, buf + n, BUFSIZ - 1)) >
+               0) {  // ET下可以读就一直读
+          n += nread;
+        }
+        if (nread == -1 && errno != EAGAIN) {
+          perror("read error");
+        }
+        ev.data.fd = fd;
+        ev.events = events[i].events | EPOLLOUT | EPOLLERR;  // MOD OUT
+        if (epoll_ctl(epfd, EPOLL_CTL_MOD, fd, &ev) == -1) {
+          perror("epoll_ctl: mod");
+        }
+      }
+      if (events[i].events & EPOLLERR) {
         break;
       }
-      if (evts[0].data.fd == pfd[0]) {
-        // sleep(10);
-        len = read(pfd[0], buf, MAXLINE / 2);
-        if (len <= 0) {
-          break;
+      if (events[i].events & EPOLLOUT) {
+        sprintf(buf, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\nHello World",
+                11);
+        int nwrite, data_size = strlen(buf);
+        n = data_size;
+        while (n > 0) {
+          nwrite = write(fd, buf + data_size - n, n);  // ET下一直将要写数据写完
+          if (nwrite < n) {
+            if (nwrite == -1 && errno != EAGAIN) {
+              perror("write error");
+            }
+            break;
+          }
+          n -= nwrite;
         }
-        printf("%d\n", len);
-        write(STDOUT_FILENO, buf, len);
-        epoll_event ev = {0};
-        ev.data.fd = evts[0].data.fd;
-        ev.events = EPOLLIN | EPOLLET;
-        epoll_ctl(epfd, EPOLL_CTL_MOD, ev.data.fd, &ev);
+        close(fd);
       }
     }
   }
-  close(pfd[0]);
   return 0;
 }

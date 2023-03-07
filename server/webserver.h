@@ -15,6 +15,9 @@
 
 #include <memory>
 #include <unordered_map>
+
+#include "log/log.h"
+static const int MAX_FD = 65536;
 struct WebServer {
   // member
  private:
@@ -42,6 +45,7 @@ struct WebServer {
   void initEventMode();
   void initListenSocket();
   void setFdNonBlock(int fd);
+  void dealCloseConn(int fd);
   void dealListen();
   void sendBusyMsg(int fd, const char* msg);
   void addClient(int fd, sockaddr_in addr);

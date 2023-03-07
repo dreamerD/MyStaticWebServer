@@ -21,8 +21,6 @@ void HeapTimer::DoWork(int fd) {
   if (heap.empty() || ref.count(fd) == 0) {
     return;
   }
-  TimerNode& node = heap[ref[fd]];
-  node.cb();
   del(ref[fd]);
   return;
 }
