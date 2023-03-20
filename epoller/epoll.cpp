@@ -1,6 +1,6 @@
 #include "epoll.h"
 
-Epoller::Epoller(int maxsize = 1024) : size(maxsize) {
+Epoller::Epoller(int maxsize) : size(maxsize) {
   epollFd = epoll_create(1024);
   events = new epoll_event[size];
 }

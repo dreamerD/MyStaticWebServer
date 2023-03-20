@@ -17,7 +17,7 @@ class Buffer {
   bool Readable();
   char GetChar(size_t pos);
   void MoveReadPos(const char* end);
-  void Buffer::MoveReadPos(size_t len);
+  void MoveReadPos(size_t len);
   void Append(const std::string& str);
   char* WriteBeginPos();
   size_t WriteAbleBytes();

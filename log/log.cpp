@@ -38,6 +38,7 @@ void Log::Init(int level = 1, const char* path, const char* suffix,
                int maxQueueSize) {
   this->isOpen = true;
   this->level = level;
+  this->maxLines = 1000;
   if (maxQueueSize > 0) {
     this->isAsync = true;
     std::unique_ptr<BlockDeque<std::string>> newDeque(
@@ -45,6 +46,7 @@ void Log::Init(int level = 1, const char* path, const char* suffix,
     this->deque = move(newDeque);
 
     std::unique_ptr<std::thread> NewThread(new std::thread(FlushLogThread));
+    NewThread->detach();
     this->writeThread = move(NewThread);
   } else {
     this->isAsync = false;

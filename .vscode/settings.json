@@ -52,6 +52,7 @@
         "cstring": "cpp",
         "unordered_set": "cpp",
         "map": "cpp",
-        "regex": "cpp"
+        "regex": "cpp",
+        "cinttypes": "cpp"
     }
 }

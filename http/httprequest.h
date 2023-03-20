@@ -6,9 +6,9 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "buffer/buffer.h"
-#include "database/sqlconnRAII.h"
-#include "log/log.h"
+#include "../buffer/buffer.h"
+#include "../database/sqlconnRAII.h"
+#include "../log/log.h"
 const std::unordered_set<std::string> DEFAULT_HTML{
     "/index", "/register", "/login", "/welcome", "/video", "/picture",
 };
@@ -34,9 +34,9 @@ class HttpRequest {
  public:
   HttpRequest() : state(REQUEST_LINE) {}
   HTTP_CODE Parse(Buffer& buff);
-  void HttpRequest::Init();
-  std::string& HttpRequest::Path();
-  bool HttpRequest::IsKeepAlive() const;
+  void Init();
+  std::string& Path();
+  bool IsKeepAlive() const;
 
  private:
   bool parseRequestLine(const std::string& line);  // 返回是否正确
@@ -47,8 +47,8 @@ class HttpRequest {
   void parsePost();
   void parseFromUrlencoded();
   int converHex(char ch);
-  bool HttpRequest::UserVerify(const std::string& name, const std::string& pwd,
-                               bool isLogin);
+  bool UserVerify(const std::string& name, const std::string& pwd,
+                  bool isLogin);
 
  private:
   std::string method, path, version, body;

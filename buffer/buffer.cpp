@@ -67,4 +67,5 @@ size_t Buffer::WriteAbleBytes() { return buffer.size() - writePos; }
 std::string Buffer::GetAllReadableData() {
   std::string str(ReadBeginPos(), WriteBeginPos());
   Init();
+  return str;
 }

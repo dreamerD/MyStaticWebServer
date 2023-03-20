@@ -1,8 +1,3 @@
-/*
- * @Author       : mark
- * @Date         : 2020-06-25
- * @copyleft Apache 2.0
- */
 #ifndef HTTP_RESPONSE_H
 #define HTTP_RESPONSE_H
 
@@ -15,8 +10,8 @@
 
 #include <unordered_map>
 
-#include "buffer/buffer.h"
-// #include "../log/log.h"
+#include "../buffer/buffer.h"
+#include "../log/log.h"
 
 class HttpResponse {
  public:
@@ -29,7 +24,6 @@ class HttpResponse {
   void UnmapFile();
   char* File();
   size_t FileLen() const;
-  void ErrorContent(Buffer& buff, std::string message);
   int Code() const { return code; }
 
  private:
@@ -39,7 +33,7 @@ class HttpResponse {
 
   void errorHtml();
   std::string getFileType();
-  void HttpResponse::errorContent(Buffer& buff, std::string message);
+  void errorContent(Buffer& buff, std::string message);
   bool isKeepAlive;
 
   std::string path;

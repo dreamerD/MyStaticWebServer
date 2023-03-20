@@ -102,7 +102,7 @@ bool HttpRequest::parseBody(const std::string& line) {
 }
 
 void HttpRequest::parsePath() {
-  if (path == "/") {
+  if (path == "/") {   
     path = "/index.html";
   } else {
     for (auto& item : DEFAULT_HTML) {
@@ -263,7 +263,7 @@ bool HttpRequest::UserVerify(const std::string& name, const std::string& pwd,
     }
     flag = true;
   }
-  // SqlConnPool::Instance()->FreeConn(sql);
+  SqlConnPool::Instance()->FreeConn(sql);
   LOG_DEBUG("UserVerify Success!!");
   return flag;
 }

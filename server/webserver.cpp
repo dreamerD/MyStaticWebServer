@@ -10,10 +10,10 @@ WebServer::WebServer(int port, int trigMode, int timeoutMS, bool optLinger,
       openLinger(optLinger),
       isclose(false),
       timeoutMS(timeoutMS),
-      timer(new Timer()),
-      threadpool(new ThreadPool()),
-      epoller(new Epoller()) {
-  if (openLog) {
+      timer(new HeapTimer()),
+      threadpool(new ThreadPool(8)),
+      epoller(new Epoller(1024)) {
+  if (true) {
     Log::Instance()->Init(logLevel, "./log", ".log", logQueSize);
   }
   srcDir = getcwd(nullptr, 256);
@@ -28,8 +28,6 @@ WebServer::WebServer(int port, int trigMode, int timeoutMS, bool optLinger,
   initListenSocket();
 }
 void WebServer::Start() {
-  // 默认代码逻辑执行时间小于设置的超时时间，
-  // 解决方法，设置标志位判断代码是否结束
   int timeMS = -1;
   printf("Server start!\n");
   while (!isclose) {
@@ -40,30 +38,33 @@ void WebServer::Start() {
     for (int i = 0; i < ret; i++) {
       int fd = epoller->GetEventFd(i);
       uint32_t event = epoller->GetEvent(i);
+      printf("循环,fd=%d", fd);
       if (fd == listenfd) {
         dealListen();
       } else if (event & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) {
-        closeConn(fd);
+        closeConn(&users[fd]);
       } else if (event & EPOLLIN) {
         dealRead(fd);
       } else if (event & EPOLLOUT) {
         dealWrite(fd);
       } else {
-        printf("unexpected error!\n");
+        LOG_INFO("unexpected error!\n");
       }
     }
   }
 }
 
 void WebServer::dealListen() {
+  printf("deal listen\n");
   struct sockaddr_in addr;
   socklen_t len = sizeof(addr);
   // listenEvent & EPOLLET
   int fd;
-  while (fd = accept(listenfd, (sockaddr*)&addr, &len) > 0) {
+  while ((fd = accept(listenfd, (sockaddr*)&addr, &len)) > 0) {
+    printf("deal listen fd[%d]\n", fd);
     if (HttpConn::userCount >= MAX_FD) {  // 超人数
       sendBusyMsg(fd, "server busy!");
-      printf("client user is max\n");
+      LOG_INFO("client user is max");
     } else {
       addClient(fd, addr);
     }
@@ -72,41 +73,58 @@ void WebServer::dealListen() {
 void WebServer::sendBusyMsg(int fd, const char* msg) {
   int ret = send(fd, msg, strlen(msg), 0);
   if (ret == -1) {
-    printf("send busy msg to fd[%d] error!\n", fd);
+    LOG_INFO("send busy msg to fd[%d] error!\n", fd);
   } else {
-    printf("send busy msg to fd[%d] success!\n", fd);
+    LOG_INFO("send busy msg to fd[%d] success!\n", fd);
   }
   close(fd);
   return;
 }
 
 void WebServer::addClient(int fd, sockaddr_in addr) {
+  printf("add Client\n");
   // 1.添加到users
   users[fd].Init(fd, addr);
   // 2.添加timer
-  timer->Add(fd, timeoutMS, std::bind(WebServer::closeConn, this, fd));
+  timer->Add(fd, timeoutMS,
+             std::bind(&WebServer::closeConn, this, &this->users[fd]));
   // 3.
-  epoller->AddFd(fd, connEvent | EPOLLIN);
   setFdNonBlock(fd);
-  printf("client[%d] add success!\n", fd);
+  // 4.
+  epoller->AddFd(fd, connEvent | EPOLLIN);
+  LOG_INFO("client[%d] add success!\n", fd);
 }
 
-void WebServer::closeConn(int fd) {
-  HttpConn& client = users[fd];
-  LOG_INFO("Client[%d] quit!", client.GetFd());
-  epoller->DeleteFd(fd);
-  client.Close();
-  timer->DoWork(fd);
+void WebServer::closeConn(HttpConn* client) {
+  printf("end2\n");
+  if (client->running.load() == true) {
+    printf("end3\n");
+    return;
+  }
+  printf("end4\n");
+  if (client->valid.test_and_set()) {
+    printf("end5\n");
+    return;
+  }
+  printf("end6\n");
+  printf("Client[%d] quit!\n", client->GetFd());
+  printf("end7\n");
+  client->Close();
+  printf("end8\n");
+  epoller->DeleteFd(client->GetFd());
+  printf("end9\n");
 }
 
 void WebServer::dealRead(int fd) {
   timer->Adjust(fd, timeoutMS);  // 调整定时器
-  threadpool->AddTask(std::bind(&WebServer::read, this, fd));
+  // 避免在子进程中访问全局变量导致race
+  threadpool->AddTask(std::bind(&WebServer::read, this, &this->users[fd], fd));
 }
 
 void WebServer::dealWrite(int fd) {
+  printf("WebServer::dealWrite[%d]", fd);
   timer->Adjust(fd, timeoutMS);  // 调整定时器
-  threadpool->AddTask(std::bind(&WebServer::write, this, fd));
+  threadpool->AddTask(std::bind(&WebServer::write, this, &this->users[fd], fd));
 }
 
 void WebServer::initEventMode() {
@@ -119,18 +137,18 @@ void WebServer::initListenSocket() {
   int ret;
   struct sockaddr_in addr;
   if (port > 65535 || port < 1024) {
-    printf("port: %d error!", port);
+    LOG_ERROR("port: %d error!", port);
     exit(port);
   }
   listenfd = socket(AF_INET, SOCK_STREAM, 0);
   if (listenfd < 0) {
-    printf("create listenfd %d error!", listenfd);
+    LOG_ERROR("create listenfd %d error!", listenfd);
     exit(listenfd);
   }
   int optval = 1;
   if (setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) <
       0) {
-    printf("setsocketopt error! ret=%d", ret);
+    LOG_ERROR("setsocketopt error! ret=%d", ret);
     exit(ret);
   }
   if (openLinger) {
@@ -140,7 +158,7 @@ void WebServer::initListenSocket() {
     optLinger.l_onoff = 1;
     if (setsockopt(listenfd, SOL_SOCKET, SO_LINGER, &optLinger,
                    sizeof(optLinger)) < 0) {
-      printf("setsockopt linger error! ret=%d", ret);
+      LOG_ERROR("setsockopt linger error! ret=%d", ret);
       exit(port);
     }
   }
@@ -153,24 +171,24 @@ void WebServer::initListenSocket() {
   // https://www.cnblogs.com/klxs1996/p/12809044.html
   // bind函数用于将套接字与指定端口相连
   if (bind(listenfd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-    printf("bind error!%d", ret);
-    exit(ret);
+    LOG_ERROR("bind error!");
+    exit(-1);
   }
   // https://blog.csdn.net/seu_lyr/article/details/9427655
 
   if (listen(listenfd, 5) < 0) {
-    printf("bind error!%d", ret);
+    LOG_ERROR("bind error!");
     close(listenfd);  // 关闭监听套接字
-    exit(ret);
+    exit(-1);
   }
   // 设置非阻塞
   setFdNonBlock(listenfd);
 
-  if (epoller->AddFd(listenfd, listenEvent | EPOLLIN) < 0) {
-    printf("epoll add listen fd error !%d", ret);
+  if (!epoller->AddFd(listenfd, listenEvent | EPOLLIN)) {
+    LOG_ERROR("epoll add listen fd error !");
     exit(-1);
   }
-  printf("port[%d] init success!\n");
+  LOG_INFO("port[%d] init success!\n");
 }
 
 void WebServer::setFdNonBlock(int fd) {
@@ -178,27 +196,30 @@ void WebServer::setFdNonBlock(int fd) {
   fcntl(fd, F_SETFL, flag | O_NONBLOCK);
 }
 
-void WebServer::read(int fd) {
-  HttpConn& client = users[fd];
+void WebServer::read(HttpConn* client, int fd) {
+  printf("sub thread read\n");
   int ret = -1;
   int readErrno = 0;
-  ret = client.Read(readErrno);
+  ret = client->Read(readErrno);
   if (ret > 0 || readErrno == EINTR || readErrno == EWOULDBLOCK ||
       readErrno == EAGAIN) {
-    process(fd);
+    process(client, fd);
+    printf("sub thread process\n");
   } else {
-    closeConn(fd);
+    printf("sub thread close\n");
+    client->running.store(false);
+    closeConn(client);
   }
 }
 
-void WebServer::write(int fd) {
-  HttpConn& client = users[fd];
+void WebServer::write(HttpConn* client, int fd) {
+  printf("sub thread write\n");
   int ret = -1;
   int writeErrno = 0;
-  ret = client.Write(writeErrno);
-  if (client.ToWriteBytes() == 0) {
+  ret = client->Write(writeErrno);
+  if (client->ToWriteBytes() == 0) {
     /* 传输完成 */
-    if (client.IsKeepAlive()) {
+    if (client->IsKeepAlive()) {
       epoller->ModFd(fd, connEvent | EPOLLIN);
       return;
     }
@@ -210,13 +231,17 @@ void WebServer::write(int fd) {
       return;
     }
   }
-  closeConn(fd);
+  printf("end0\n");
+  client->running.store(false);
+  printf("end1\n");
+  closeConn(client);
 }
 
-void WebServer::process(int fd) {
-  HttpConn& client = users[fd];
-  if (client.Process()) {  // 分析失败或成功
+void WebServer::process(HttpConn* client, int fd) {
+  // HttpConn& client = users[fd];
+  if (client->Process()) {  // 分析失败或成功
     epoller->ModFd(fd, connEvent | EPOLLOUT);
+    printf("process\n");
   } else {  // 分析不完整
     epoller->ModFd(fd, connEvent | EPOLLIN);
   }

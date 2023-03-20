@@ -1,16 +1,19 @@
 #include "httpconn.h"
-
-HttpConn::HttpConn() {
-  fd = -1;
-  addr = {0};
-}
+char* HttpConn::srcDir;
+std::atomic<int> HttpConn::userCount;
+HttpConn::HttpConn(){};
 
 void HttpConn::Init(int fd, const sockaddr_in& addr) {
   this->fd = fd;
+  userCount++;
   this->addr = addr;
+  this->running.store(true);
+  this->valid.clear();
   // 读buffer初始化
   // 写buffer初始化
-  printf("Client[%d](%s:%d) in, userCount:%d", fd, GetIP(), GetPort(),
+  this->writeBuff.Init();
+  this->readBuff.Init();
+  printf("Client[%d](%s:%d) in, userCount:%d\n", fd, GetIP(), GetPort(),
          (int)userCount);
 }
 
@@ -18,8 +21,8 @@ void HttpConn::Close() {
   response.UnmapFile();
   userCount--;
   close(fd);
-  printf("Client[%d](%s:%d) quit, UserCount:%d", fd, GetIP(), GetPort(),
-         (int)userCount);
+  LOG_INFO("Client[%d](%s:%d) quit, UserCount:%d", fd, GetIP(), GetPort(),
+           (int)userCount);
 }
 int HttpConn::GetFd() const { return fd; };
 
@@ -82,7 +85,7 @@ bool HttpConn::Process() {
     response.Init(srcDir, request.Path(), false, 400);
 
   } else {
-    printf("%s", request.Path().c_str());
+    LOG_INFO("%s", request.Path().c_str());
     response.Init(srcDir, request.Path(), request.IsKeepAlive(), 200);
   }
 
@@ -98,8 +101,8 @@ bool HttpConn::Process() {
     iov[1].iov_len = response.FileLen();
     iovCnt = 2;
   }
-  printf("filesize:%d, %d  to %d", response.FileLen(), iovCnt,
-         iov[0].iov_len + iov[1].iov_len);
+  LOG_INFO("filesize:%d, %d  to %d", response.FileLen(), iovCnt,
+           iov[0].iov_len + iov[1].iov_len);
   return 1;
 }
 

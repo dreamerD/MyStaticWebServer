@@ -1,22 +1,24 @@
 #ifndef WEBSERVER_H
 #define WEBSERVER_H
 #include <arpa/inet.h>
-#include <epoller/epoll.h>
 #include <fcntl.h>
-#include <http/httpconn.h>
 #include <netinet/in.h>
-#include <pool/threadpool.h>
 #include <stdint.h>  // uint32_t
 #include <string.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
-#include <timer/timer.h>
 #include <unistd.h>
 
 #include <memory>
+#include <mutex>
 #include <unordered_map>
 
-#include "log/log.h"
+#include "../database/sqlconnRAII.h"
+#include "../epoller/epoll.h"
+#include "../http/httpconn.h"
+#include "../log/log.h"
+#include "../pool/threadpool.h"
+#include "../timer/heaptimer.h"
 static const int MAX_FD = 65536;
 struct WebServer {
   // member
@@ -39,6 +41,7 @@ struct WebServer {
             const char* sqlUser, const char* sqlPwd, const char* dbName,
             int connPoolNum, int threadNum, bool openLog, int logLevel,
             int logQueSize);
+  ~WebServer();
   void Start();
 
  private:
@@ -49,13 +52,14 @@ struct WebServer {
   void dealListen();
   void sendBusyMsg(int fd, const char* msg);
   void addClient(int fd, sockaddr_in addr);
-  void closeConn(int fd);
+  void closeConn(HttpConn* client);
   void dealRead(int fd);
   void dealWrite(int fd);
 
-  void read(int fd);
-  void write(int fd);
-  void process(int fd);
+  void read(HttpConn* client, int fd);
+  void write(HttpConn* client, int fd);
+  void process(HttpConn* client, int fd);
+  std::mutex mtx;
 };
 
 #endif

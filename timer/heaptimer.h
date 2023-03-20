@@ -10,9 +10,7 @@ class HeapTimer : public Timer {
  public:
   virtual void Adjust(int id, int newExpires);
 
-  virtual void Add(int id, int timeOut, std::function<void()>&& cb);
-
-  virtual void DoWork(int id);
+  virtual void Add(int id, int timeOut, std::function<void()> cb);
 
   virtual void Clear();
 

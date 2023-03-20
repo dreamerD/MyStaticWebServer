@@ -8,8 +8,8 @@
 #include <mutex>
 #include <thread>
 
+#include "../buffer/buffer.h"
 #include "blockqueue.h"
-#include "buffer/buffer.h"
 class Log {
  public:
   void Init(int level, const char* path = "./log", const char* suffix = ".log",
@@ -61,7 +61,6 @@ class Log {
     Log* log = Log::Instance();                      \
     if (log->IsOpen() && log->GetLevel() <= level) { \
       log->Write(level, format, ##__VA_ARGS__);      \
-      log->Flush();                                  \
     }                                                \
   } while (0);
 

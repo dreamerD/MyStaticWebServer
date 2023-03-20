@@ -7,6 +7,7 @@
 class Epoller {
  public:
   Epoller(int maxsize = 1024);
+  ~Epoller();
   int Wait(int timeoutMS);
   bool AddFd(int fd, uint32_t event);
   bool DeleteFd(int fd);

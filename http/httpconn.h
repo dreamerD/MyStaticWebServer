@@ -10,14 +10,14 @@
 
 #include <atomic>
 
-#include "buffer/buffer.h"
+#include "../buffer/buffer.h"
+#include "../log/log.h"
 #include "httprequest.h"
 #include "httpresponse.h"
-
 class HttpConn {
  public:
   HttpConn();
-  ~HttpConn();
+  ~HttpConn() { Close(); }
   void Init(int fd, const sockaddr_in& addr);
   void Close();
   ssize_t Read(int& saveErrno);
@@ -26,12 +26,13 @@ class HttpConn {
   bool IsKeepAlive() const { return request.IsKeepAlive(); }
   int ToWriteBytes();
   int GetPort() const;
-  int HttpConn::GetFd() const;
+  int GetFd() const;
+  std::atomic_flag valid;
+  std::atomic<bool> running;
 
  private:
   const char* GetIP() const;
-  int GetPort() const;
-  struct sockaddr_in HttpConn::GetAddr() const;
+  struct sockaddr_in GetAddr() const;
 
  public:
   static std::atomic<int> userCount;  // 原子操作

@@ -97,7 +97,7 @@ T BlockDeque<T>::Front() {
 template <class T>
 T BlockDeque<T>::Back() {
   std::lock_guard<std::mutex> locker(mtx);
-  return deq_.back();
+  return deq.back();
 }
 
 template <class T>

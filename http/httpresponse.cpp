@@ -116,11 +116,11 @@ void HttpResponse::addContent(Buffer& buff) {
 
   /* 将文件映射到内存提高文件的访问速度
       MAP_PRIVATE 建立一个写入时拷贝的私有映射*/
-  printf("file path %s", (srcDir + path).data());
+  LOG_INFO("file path %s", (srcDir + path).data());
   int* mmRet =
       (int*)mmap(0, mmFileStat.st_size, PROT_READ, MAP_PRIVATE, srcFd, 0);
   if (*mmRet == -1) {
-    ErrorContent(buff, "File NotFound!");
+    errorContent(buff, "File NotFound!");
     return;
   }
   mmFile = (char*)mmRet;
@@ -157,3 +157,15 @@ void HttpResponse::UnmapFile() {
 char* HttpResponse::File() { return mmFile; }
 
 size_t HttpResponse::FileLen() const { return mmFileStat.st_size; }
+std::string HttpResponse::getFileType() {
+  /* 判断文件类型 */
+  std::string::size_type idx = path.find_last_of('.');
+  if (idx == std::string::npos) {
+    return "text/plain";
+  }
+  std::string suffix = path.substr(idx);
+  if (SUFFIX_TYPE.count(suffix) == 1) {
+    return SUFFIX_TYPE.find(suffix)->second;
+  }
+  return "text/plain";
+}
