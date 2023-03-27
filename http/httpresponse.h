@@ -20,13 +20,15 @@ class HttpResponse {
 
   void Init(const std::string& srcDir, std::string& path,
             bool isKeepAlive = false, int code = -1);
-  void MakeResponse(Buffer& buff);
+  // void MakeResponse(Buffer& buff);
+  void AddStatus(int code);
+  void AddContent(const std::string& content);
   void UnmapFile();
   char* File();
   size_t FileLen() const;
   int Code() const { return code; }
 
- private:
+ public:
   void addStateLine(Buffer& buff);
   void addHeader(Buffer& buff);
   void addContent(Buffer& buff);
@@ -38,6 +40,7 @@ class HttpResponse {
 
   std::string path;
   std::string srcDir;
+  std::string content;
   int code;
   char* mmFile;
   struct stat mmFileStat;

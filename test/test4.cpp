@@ -2,6 +2,7 @@
 #include <sys/epoll.h>
 #include <unistd.h>
 
+#include <string>
 #include <utility>
 
 #include "errno.h"
@@ -17,10 +18,6 @@ void f(int& x) {
 void f(int&& x) { printf("右值\n"); }
 // https://www.cnblogs.com/5iedu/p/11324772.html
 int main(void) {
-  int x = 5;
-  int&& a = 5;
-  f(x);
-  printf("%d\n", x);
-  f(std::move(a));
-  printf("%d\n", a);
+  std::string str = "哈哈";
+  printf("%s", str.c_str());
 }

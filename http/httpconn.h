@@ -11,6 +11,7 @@
 #include <atomic>
 
 #include "../buffer/buffer.h"
+#include "../engine/engine.h"
 #include "../log/log.h"
 #include "httprequest.h"
 #include "httpresponse.h"
@@ -38,7 +39,7 @@ class HttpConn {
   static std::atomic<int> userCount;  // 原子操作
   static char* srcDir;
 
- private:
+ public:
   int fd;
   struct sockaddr_in addr;
   int iovCnt;

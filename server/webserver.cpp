@@ -3,9 +3,7 @@
 // https://xie.infoq.cn/article/8e95ff62ee9d5a2ce97492323
 // https://zhuanlan.zhihu.com/p/107995399
 WebServer::WebServer(int port, int trigMode, int timeoutMS, bool optLinger,
-                     int sqlPort, const char* sqlUser, const char* sqlPwd,
-                     const char* dbName, int connPoolNum, int threadNum,
-                     bool openLog, int logLevel, int logQueSize)
+                     int threadNum, bool openLog, int logLevel, int logQueSize)
     : port(port),
       openLinger(optLinger),
       isclose(false),
@@ -21,8 +19,6 @@ WebServer::WebServer(int port, int trigMode, int timeoutMS, bool optLinger,
   strncat(srcDir, res, 256);
   HttpConn::userCount = 0;
   HttpConn::srcDir = srcDir;
-  SqlConnPool::Instance()->Init("localhost", sqlPort, sqlUser, sqlPwd, dbName,
-                                connPoolNum);
 
   initEventMode();
   initListenSocket();
@@ -250,5 +246,11 @@ WebServer::~WebServer() {
   close(listenfd);
   isclose = true;
   free(srcDir);
-  SqlConnPool::Instance()->ClosePool();
+}
+
+void ListenAndServe(int port, int trigMode, int timeout, bool optLinger,
+                    int threadNum, bool openLog, int logLevel, int logQueSize) {
+  WebServer server(port, trigMode, timeout, optLinger, threadNum, openLog,
+                   logLevel, logQueSize);
+  server.Start();
 }

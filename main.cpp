@@ -1,6 +1,15 @@
+#include "engine/engine.h"
+#include "http/httprequest.h"
+#include "http/httpresponse.h"
 #include "server/webserver.h"
+void f(HttpRequest* req, HttpResponse* res) {
+  res->AddContent("Hello World!");
+};
+void h(HttpRequest* req, HttpResponse* res) {
+  res->AddContent(UTF8Url::Decode(req->GetBody()));
+};
 int main() {
-  WebServer server(1316, 3, 6000, false, 6306, "root", "root", "mydb", 12, 6,
-                   true, 1, 1024);
-  server.Start();
+  Engine::GET("/hello", f);
+  Engine::POST("/hello", h);
+  ListenAndServe();
 }

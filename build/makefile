@@ -1,8 +1,8 @@
 CXX = g++
-CFLAGS = -std=c++14 -O2 -Wall -g
+CFLAGS = -std=c++17 -O2 -Wall -g
 
 TARGET = server
-OBJS = ../log/*.cpp ../database/*.cpp  ../timer/*.cpp \
+OBJS = ../log/*.cpp ../timer/*.cpp \
        ../http/*.cpp ../buffer/*.cpp ../epoller/*.cpp ../server/*.cpp  ../main.cpp
 
 all: $(OBJS)

@@ -59,22 +59,22 @@ void HttpResponse::Init(const std::string& srcDir, std::string& path,
   this->mmFileStat = {0};
 }
 
-void HttpResponse::MakeResponse(Buffer& buff) {
-  /* 判断请求的资源文件 */
-  if (stat((srcDir + path).data(), &mmFileStat) < 0 ||
-      S_ISDIR(mmFileStat.st_mode)) {
-    code = 404;
-  } else if (!(mmFileStat.st_mode & S_IROTH)) {
-    // 无读权限
-    code = 403;
-  } else if (code == -1) {
-    code = 200;
-  }
-  errorHtml();
-  addStateLine(buff);
-  addHeader(buff);
-  addContent(buff);
-}
+// void HttpResponse::MakeResponse(Buffer& buff) {
+//   /* 判断请求的资源文件 */
+//   if (stat((srcDir + path).data(), &mmFileStat) < 0 ||
+//       S_ISDIR(mmFileStat.st_mode)) {
+//     code = 404;
+//   } else if (!(mmFileStat.st_mode & S_IROTH)) {
+//     // 无读权限
+//     code = 403;
+//   } else if (code == -1) {
+//     code = 200;
+//   }
+//   errorHtml();
+//   addStateLine(buff);
+//   addHeader(buff);
+//   addContent(buff);
+// }
 
 void HttpResponse::errorHtml() {
   if (CODE_PATH.count(code)) {
@@ -83,7 +83,11 @@ void HttpResponse::errorHtml() {
     stat((srcDir + path).data(), &mmFileStat);
   }
 }
+void HttpResponse::AddStatus(int code) { this->code = code; }
 
+void HttpResponse::AddContent(const std::string& content) {
+  this->content = content;
+}
 void HttpResponse::addStateLine(Buffer& buff) {
   std::string status;
   if (CODE_STATUS.count(code) == 1) {
@@ -104,29 +108,31 @@ void HttpResponse::addHeader(Buffer& buff) {
   } else {
     buff.Append("close\r\n");
   }
-  buff.Append("Content-type: " + getFileType() + "\r\n");
+  buff.Append("Content-type: text/plain;charset=utf-8\r\n");
 }
 
 void HttpResponse::addContent(Buffer& buff) {
-  int srcFd = open((srcDir + path).data(), O_RDONLY);
-  if (srcFd < 0) {
-    errorContent(buff, "File NotFound!");
-    return;
-  }
+  // int srcFd = open((srcDir + path).data(), O_RDONLY);
+  // if (srcFd < 0) {
+  //   errorContent(buff, "File NotFound!");
+  //   return;
+  // }
 
-  /* 将文件映射到内存提高文件的访问速度
-      MAP_PRIVATE 建立一个写入时拷贝的私有映射*/
-  LOG_INFO("file path %s", (srcDir + path).data());
-  int* mmRet =
-      (int*)mmap(0, mmFileStat.st_size, PROT_READ, MAP_PRIVATE, srcFd, 0);
-  if (*mmRet == -1) {
-    errorContent(buff, "File NotFound!");
-    return;
-  }
-  mmFile = (char*)mmRet;
-  close(srcFd);
-  buff.Append("Content-length: " + std::to_string(mmFileStat.st_size) +
-              "\r\n\r\n");
+  // /* 将文件映射到内存提高文件的访问速度
+  //     MAP_PRIVATE 建立一个写入时拷贝的私有映射*/
+  // LOG_INFO("file path %s", (srcDir + path).data());
+  // int* mmRet =
+  //     (int*)mmap(0, mmFileStat.st_size, PROT_READ, MAP_PRIVATE, srcFd, 0);
+  // if (*mmRet == -1) {
+  //   errorContent(buff, "File NotFound!");
+  //   return;
+  // }
+  // mmFile = (char*)mmRet;
+  // close(srcFd);
+  // buff.Append("Content-Length: " + std::to_string(mmFileStat.st_size) +
+  //             "\r\n\r\n");
+  buff.Append("Content-Length: " + std::to_string(content.size()) + "\r\n\r\n");
+  buff.Append(content);
 }
 
 void HttpResponse::errorContent(Buffer& buff, std::string message) {
@@ -143,7 +149,7 @@ void HttpResponse::errorContent(Buffer& buff, std::string message) {
   body += "<p>" + message + "</p>";
   body += "<hr><em>MyWebServer</em></body></html>";
 
-  buff.Append("Content-length: " + std::to_string(body.size()) + "\r\n\r\n");
+  buff.Append("Content-Length: " + std::to_string(body.size()) + "\r\n\r\n");
   buff.Append(body);
 }
 

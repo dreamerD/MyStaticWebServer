@@ -6,12 +6,11 @@
             "command": "/usr/bin/g++",
             "args": [
                 "-fdiagnostics-color=always",
-                "-std=c++14",
+                "-std=c++17",
                 // "-O2",
                 "-Wall",
                 "-g",
                 "/home/zd/dyjv2/MyWebServer/log/*.cpp",
-                "/home/zd/dyjv2/MyWebServer/database/*.cpp",
                 "/home/zd/dyjv2/MyWebServer/timer/*.cpp",
                 "/home/zd/dyjv2/MyWebServer/http/*.cpp",
                 "/home/zd/dyjv2/MyWebServer/server/*.cpp",

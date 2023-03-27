@@ -13,14 +13,14 @@
 #include <mutex>
 #include <unordered_map>
 
-#include "../database/sqlconnRAII.h"
+#include "../engine/engine.h"
 #include "../epoller/epoll.h"
 #include "../http/httpconn.h"
 #include "../log/log.h"
 #include "../pool/threadpool.h"
 #include "../timer/heaptimer.h"
 static const int MAX_FD = 65536;
-struct WebServer {
+class WebServer {
   // member
  private:
   int port;         // 监听端口
@@ -37,10 +37,8 @@ struct WebServer {
   std::unordered_map<int, HttpConn> users;
   // function
  public:
-  WebServer(int port, int trigMode, int timeout, bool optLinger, int sqlPort,
-            const char* sqlUser, const char* sqlPwd, const char* dbName,
-            int connPoolNum, int threadNum, bool openLog, int logLevel,
-            int logQueSize);
+  WebServer(int port, int trigMode, int timeout, bool optLinger, int threadNum,
+            bool openLog, int logLevel, int logQueSize);
   ~WebServer();
   void Start();
 
@@ -48,7 +46,6 @@ struct WebServer {
   void initEventMode();
   void initListenSocket();
   void setFdNonBlock(int fd);
-  void dealCloseConn(int fd);
   void dealListen();
   void sendBusyMsg(int fd, const char* msg);
   void addClient(int fd, sockaddr_in addr);
@@ -61,5 +58,9 @@ struct WebServer {
   void process(HttpConn* client, int fd);
   std::mutex mtx;
 };
+void ListenAndServe(int port = 1316, int trigMode = 3, int timeout = 6000,
+                    bool optLinger = false, int threadNum = 6,
+                    bool openLog = true, int logLevel = 1,
+                    int logQueSize = 1024);
 
 #endif

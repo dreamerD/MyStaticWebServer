@@ -2,7 +2,9 @@
 char* HttpConn::srcDir;
 std::atomic<int> HttpConn::userCount;
 HttpConn::HttpConn(){};
-
+std::unordered_map<std::string,
+                   std::function<void(HttpRequest*, HttpResponse*)>>
+    Engine::router;
 void HttpConn::Init(int fd, const sockaddr_in& addr) {
   this->fd = fd;
   userCount++;
@@ -74,36 +76,50 @@ ssize_t HttpConn::Write(int& saveErrno) {
 }
 
 bool HttpConn::Process() {
+  printf("Process()0\n");
   request.Init();
   if (readBuff.writePos - readBuff.readPos <= 0) {
-    return 0;
+    printf("Process()1\n");
+    return false;
   }
   HTTP_CODE res = request.Parse(readBuff);
   if (res == NO_REQUEST) {
-    return 0;
+    printf("Process()2\n");
+    return false;
   } else if (res == BAD_REQUEST) {
+    printf("Process()3\n");
     response.Init(srcDir, request.Path(), false, 400);
 
   } else {
-    LOG_INFO("%s", request.Path().c_str());
+    printf("%s", request.GetMethod().c_str());
+    printf("request.Path().c_str()=%s", request.Path().c_str());
+    // 执行ServeHTTP(HttpRequest*, HttpResponse*);
+    /* 可以当作路由解析器，根据不同的request.Path().c_str()执行不同的func(HttpRequest*,
+     * HttpResponse*) 然后在func中写入writebuf，ok，逻辑就是这样
+     * 包装(HttpRequest*, HttpResponse*)实现上下文，完成中间件
+     */
     response.Init(srcDir, request.Path(), request.IsKeepAlive(), 200);
+    Engine::ServeHTTP(&request, &response);
   }
+  response.addStateLine(writeBuff);
+  response.addHeader(writeBuff);
+  response.addContent(writeBuff);
 
-  response.MakeResponse(writeBuff);
+  // response.MakeResponse(writeBuff);
   /* 响应头 */
   iov[0].iov_base = writeBuff.ReadBeginPos();
   iov[0].iov_len = writeBuff.writePos - writeBuff.readPos;
   iovCnt = 1;
 
-  /* 文件 */
-  if (response.FileLen() > 0 && response.File()) {
-    iov[1].iov_base = response.File();
-    iov[1].iov_len = response.FileLen();
-    iovCnt = 2;
-  }
-  LOG_INFO("filesize:%d, %d  to %d", response.FileLen(), iovCnt,
-           iov[0].iov_len + iov[1].iov_len);
-  return 1;
+  // /* 文件 */
+  // if (response.FileLen() > 0 && response.File()) {
+  //   iov[1].iov_base = response.File();
+  //   iov[1].iov_len = response.FileLen();
+  //   iovCnt = 2;
+  //   LOG_INFO("filesize:%d, %d  to %d", response.FileLen(), iovCnt,
+  //            iov[0].iov_len + iov[1].iov_len);
+  // }
+  return true;
 }
 
 int HttpConn::ToWriteBytes() { return iov[0].iov_len + iov[1].iov_len; }
